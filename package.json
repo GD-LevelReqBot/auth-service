@@ -1,6 +1,6 @@
 {
   "name": "twitch-auth-service",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Twitch authentication service",
   "main": "index.js",
   "scripts": {

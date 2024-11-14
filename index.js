@@ -80,7 +80,7 @@ app.get('/auth/init', (req, res) => {
         `&state=${state}` +
         `&force_verify=true`;
 
-    res.json({ url: authUrl, state });
+    res.redirect(`${authUrl}`);
 });
 
 // Callback handler
