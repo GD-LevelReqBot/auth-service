@@ -19,6 +19,8 @@ TWITCH_CLIENT_ID=your_client_id
 TWITCH_CLIENT_SECRET=your_client_secret
 REDIRECT_URI=https://your-domain.com/auth/success
 SESSION_SECRET=your-session-secret
+CLIENT_URL=http://localhost:24363
+CALLBACK_URL=https://localhost:3000/auth/callback
 ```
 
 3. Build and run with Docker:

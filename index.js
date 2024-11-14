@@ -1,78 +1,105 @@
-// index.js
+// cloud-server.js
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
 const OAuth2Strategy = require('passport-oauth').OAuth2Strategy;
 const axios = require('axios');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+const TWITCH_SECRET = process.env.TWITCH_CLIENT_SECRET;
+const CALLBACK_URL = process.env.CALLBACK_URL || 'https://gdlqbot.superdev.one/auth/callback';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:24363';
 
-// Middleware
-app.use(express.json());
+app.use(cors());
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'session-secret-fallback-atasbu6dasd5r687b56arsd8',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 60000
-    }
+    secret: process.env.SESSION_SECRET,
+    resave: true,
+    saveUninitialized: true,
+    cookie: { secure: false }
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport configuration
+let authDataStore = new Map(); // Store auth data temporarily with unique keys
+
 passport.use('twitch', new OAuth2Strategy({
-        authorizationURL: 'https://id.twitch.tv/oauth2/authorize',
-        tokenURL: 'https://id.twitch.tv/oauth2/token',
-        clientID: process.env.TWITCH_CLIENT_ID,
-        clientSecret: process.env.TWITCH_CLIENT_SECRET,
-        callbackURL: process.env.REDIRECT_URI,
-        state: true
-    },
-    function(accessToken, refreshToken, profile, done) {
-        return done(null, {
-            accessToken,
-            refreshToken
+    authorizationURL: 'https://id.twitch.tv/oauth2/authorize',
+    tokenURL: 'https://id.twitch.tv/oauth2/token',
+    clientID: TWITCH_CLIENT_ID,
+    clientSecret: TWITCH_SECRET,
+    callbackURL: CALLBACK_URL,
+    state: true // Enable state for security
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        const userResponse = await axios.get('https://api.twitch.tv/helix/users', {
+            headers: {
+                'Client-ID': TWITCH_CLIENT_ID,
+                'Authorization': `Bearer ${accessToken}`,
+            }
         });
-    }));
+
+        const userData = userResponse.data.data[0];
+        const authData = {
+            accessToken,
+            refreshToken,
+            username: userData.login,
+            userId: userData.id
+        };
+
+        // Generate unique key for this auth session
+        const authKey = Math.random().toString(36).substring(2);
+        authDataStore.set(authKey, authData);
+
+        // Clean up after 5 minutes
+        setTimeout(() => {
+            authDataStore.delete(authKey);
+        }, 300000);
+
+        done(null, { authKey });
+    } catch (error) {
+        done(error);
+    }
+}));
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => done(null, user));
 
-// Routes
-app.get('/', (req, res) => {
-    // Automatically redirect to Twitch auth
-    res.redirect('/auth/twitch');
+// Initialize auth with state
+app.get('/auth/init', (req, res) => {
+    const state = Math.random().toString(36).substring(2);
+    const scopes = ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'];
+
+    const authUrl = `https://id.twitch.tv/oauth2/authorize` +
+        `?client_id=${TWITCH_CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(CALLBACK_URL)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scopes.join(' '))}` +
+        `&state=${state}` +
+        `&force_verify=true`;
+
+    res.json({ url: authUrl, state });
 });
 
-app.get('/auth/twitch', passport.authenticate('twitch', {
-    scope: ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
-    force_verify: true
-}));
-
-app.get('/auth/failed', (req, res) => {
-    res.status(401).json({
-        success: false,
-        error: 'Authentication failed'
-    });
-});
-
-app.get('/auth/success', (req, res) => {
-    if (!req.user) {
-        return res.redirect('/auth/failed');
+// Callback handler
+app.get('/auth/callback', passport.authenticate('twitch', { session: false }),
+    (req, res) => {
+        const authKey = req.user.authKey;
+        res.redirect(`${CLIENT_URL}/twitch/success?key=${authKey}`);
     }
+);
 
-    // Send token back
-    res.json({
-        success: true,
-        token: req.user.accessToken
-    });
+// Endpoint to fetch auth data
+app.get('/auth/data/:key', (req, res) => {
+    const authData = authDataStore.get(req.params.key);
+    if (authData) {
+        authDataStore.delete(req.params.key); // One-time use
+        res.json({ success: true, data: authData });
+    } else {
+        res.json({ success: false, message: 'Invalid or expired auth key' });
+    }
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(3000);
