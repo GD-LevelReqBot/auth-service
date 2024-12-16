@@ -26,8 +26,8 @@ passport.use('twitch', new OAuth2Strategy({
         authorizationURL: 'https://id.twitch.tv/oauth2/authorize',
         tokenURL: 'https://id.twitch.tv/oauth2/token',
         clientID: process.env.TWITCH_CLIENT_ID || 'xa7q77aepewgt88z6d566olye10kc8',
-        clientSecret: process.env.TWITCH_CLIENT_SECRET || 'qbel0qcwrwlxi3p0tni14ll152fi6t',
-        callbackURL: process.env.REDIRECT_URI || 'http://localhost:24363/auth/twitch/callback',
+        clientSecret: process.env.TWITCH_CLIENT_SECRET || '',
+        callbackURL: process.env.REDIRECT_URI || 'http://localhost:3000/auth/twitch/callback',
         state: true
     },
     function(accessToken, refreshToken, profile, done) {
@@ -48,12 +48,12 @@ app.get('/auth/twitch', passport.authenticate('twitch', {
 // Callback route
 app.get('/auth/twitch/callback',
     passport.authenticate('twitch', {
-        failureRedirect: '/auth/failed'
+        // failureRedirect: '/auth/failed'
     }),
     (req, res) => {
         // Ensure we have a user and access token
         if (!req.user || !req.user.accessToken) {
-            return res.redirect('/auth/failed');
+            return res.json(req);
         }
 
         // Redirect to client with access token
