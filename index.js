@@ -1,15 +1,13 @@
-// index.js
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
 const OAuth2Strategy = require('passport-oauth').OAuth2Strategy;
-const axios = require('axios');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
+app.use(cors());
 app.use(session({
     secret: process.env.SESSION_SECRET || 'session-secret-fallback-atasbu6dasd5r687b56arsd8',
     resave: false,
@@ -27,32 +25,43 @@ app.use(passport.session());
 passport.use('twitch', new OAuth2Strategy({
         authorizationURL: 'https://id.twitch.tv/oauth2/authorize',
         tokenURL: 'https://id.twitch.tv/oauth2/token',
-        clientID: process.env.TWITCH_CLIENT_ID,
-        clientSecret: process.env.TWITCH_CLIENT_SECRET,
-        callbackURL: process.env.REDIRECT_URI,
+        clientID: process.env.TWITCH_CLIENT_ID || 'xa7q77aepewgt88z6d566olye10kc8',
+        clientSecret: process.env.TWITCH_CLIENT_SECRET || 'qbel0qcwrwlxi3p0tni14ll152fi6t',
+        callbackURL: process.env.REDIRECT_URI || 'http://localhost:24363/auth/twitch/callback',
         state: true
     },
     function(accessToken, refreshToken, profile, done) {
-        return done(null, {
-            accessToken,
-            refreshToken
-        });
-    }));
+        // Simply pass the access token back
+        return done(null, { accessToken, refreshToken });
+    }
+));
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => done(null, user));
 
-// Routes
-app.get('/', (req, res) => {
-    // Automatically redirect to Twitch auth
-    res.redirect('/auth/twitch');
-});
-
+// Route to initiate Twitch authentication
 app.get('/auth/twitch', passport.authenticate('twitch', {
     scope: ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
     force_verify: true
 }));
 
+// Callback route
+app.get('/auth/twitch/callback',
+    passport.authenticate('twitch', {
+        failureRedirect: '/auth/failed'
+    }),
+    (req, res) => {
+        // Ensure we have a user and access token
+        if (!req.user || !req.user.accessToken) {
+            return res.redirect('/auth/failed');
+        }
+
+        // Redirect to client with access token
+        res.redirect(`http://localhost:24363/twitch/auth/token?accessToken=${encodeURIComponent(req.user.accessToken)}`);
+    }
+);
+
+// Failed authentication route
 app.get('/auth/failed', (req, res) => {
     res.status(401).json({
         success: false,
@@ -60,19 +69,8 @@ app.get('/auth/failed', (req, res) => {
     });
 });
 
-app.get('/auth/success', (req, res) => {
-    if (!req.user) {
-        return res.redirect('/auth/failed');
-    }
-
-    // Send token back
-    res.json({
-        success: true,
-        token: req.user.accessToken
-    });
-});
-
-// Start server
+// Server configuration
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Authentication service running on port ${PORT}`);
 });
