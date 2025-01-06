@@ -100,6 +100,21 @@ app.get('/auth/failed', (req, res) => {
     });
 });
 
+// Error handling middleware for Passport errors
+app.use((err, req, res, next) => {
+    if (err) {
+        console.error('Passport error:', err);
+
+        // You can also inspect `err` for more specific error information
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error during authentication.'
+        });
+    } else {
+        next();
+    }
+});
+
 // Server configuration
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
