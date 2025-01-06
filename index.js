@@ -31,41 +31,74 @@ passport.use('twitch', new OAuth2Strategy({
         state: true
     },
     function(accessToken, refreshToken, profile, done) {
+        console.log('OAuth2 Strategy callback triggered');
+        console.log('Access Token:', accessToken);
+        console.log('Refresh Token:', refreshToken);
+        console.log('Profile:', profile);
+
         // Simply pass the access token back
         return done(null, { accessToken, refreshToken });
     }
 ));
 
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((user, done) => done(null, user));
+passport.serializeUser((user, done) => {
+    console.log('Serializing user:', user);
+    done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+    console.log('Deserializing user:', user);
+    done(null, user);
+});
 
 // Route to initiate Twitch authentication
-app.get('/auth/twitch', passport.authenticate('twitch', {
-    scope: ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
-    force_verify: true
-}));
+app.get('/auth/twitch', (req, res, next) => {
+    console.log('Initiating Twitch authentication');
+    passport.authenticate('twitch', {
+        scope: ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
+        force_verify: true
+    })(req, res, next);
+});
 
 // Callback route
 app.get('/auth/twitch/callback',
     passport.authenticate('twitch', {
-        // failureRedirect: '/auth/failed'
+        failureRedirect: '/auth/failed'
     }),
     (req, res) => {
-        // Ensure we have a user and access token
+        console.log('Twitch callback received');
+        
         if (!req.user || !req.user.accessToken) {
-            return res.json(req);
+            console.error('No user or access token found in session');
+            return res.status(400).json({ success: false, error: 'No access token in session' });
         }
 
+        // Log the access token before redirecting
+        console.log('Access Token:', req.user.accessToken);
+
         // Redirect to client with access token
-        res.redirect(`http://localhost:24363/twitch/auth/token?accessToken=${encodeURIComponent(req.user.accessToken)}`);
+        const redirectURL = `http://localhost:24363/twitch/auth/token?accessToken=${encodeURIComponent(req.user.accessToken)}`;
+        console.log('Redirecting to:', redirectURL);
+        res.redirect(redirectURL);
     }
 );
 
-// Failed authentication route
+// Enhanced failed authentication route with detailed error logging
 app.get('/auth/failed', (req, res) => {
+    console.error('Authentication failed: Detailed Error');
+    
+    // Check if there is a specific error message in the request (if provided by Twitch)
+    if (req.query.error) {
+        console.error(`Twitch error: ${req.query.error}`);
+        console.error(`Twitch error_description: ${req.query.error_description}`);
+    }
+    
+    // Log the error from the query parameters if available
+    const errorMessage = req.query.error_description || 'Unknown error';
     res.status(401).json({
         success: false,
-        error: 'Authentication failed'
+        error: 'Authentication failed',
+        errorDetails: errorMessage
     });
 });
 
