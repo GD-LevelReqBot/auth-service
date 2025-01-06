@@ -62,9 +62,7 @@ app.get('/auth/twitch', (req, res, next) => {
 
 // Callback route
 app.get('/auth/twitch/callback',
-    passport.authenticate('twitch', {
-        failureRedirect: '/auth/failed'
-    }),
+    passport.authenticate('twitch'),
     (req, res) => {
         console.log('Twitch callback received');
         
@@ -73,8 +71,10 @@ app.get('/auth/twitch/callback',
             return res.status(400).json({ success: false, error: 'No access token in session' });
         }
 
-        // Log the access token before redirecting
         console.log('Access Token:', req.user.accessToken);
+        
+        // Log the successful authentication flow
+        console.log('Authentication successful. Redirecting to client.');
 
         // Redirect to client with access token
         const redirectURL = `http://localhost:24363/twitch/auth/token?accessToken=${encodeURIComponent(req.user.accessToken)}`;
@@ -83,11 +83,11 @@ app.get('/auth/twitch/callback',
     }
 );
 
-// Generic failed authentication route
+// Generic failed authentication route with full error logging
 app.get('/auth/failed', (req, res) => {
     console.error('Authentication failed');
 
-    // Log any error details (if available) for debugging purposes, but do not include them in the response
+    // Log the full error if available
     if (req.query.error) {
         console.error(`Twitch error: ${req.query.error}`);
         console.error(`Twitch error_description: ${req.query.error_description}`);
@@ -100,19 +100,20 @@ app.get('/auth/failed', (req, res) => {
     });
 });
 
-// Error handling middleware for Passport errors
+// Error handling middleware for logging all errors, including Passport errors
 app.use((err, req, res, next) => {
-    if (err) {
-        console.error('Passport error:', err);
+    console.error('Passport or application error:', err);
 
-        // You can also inspect `err` for more specific error information
-        res.status(500).json({
-            success: false,
-            error: 'Internal server error during authentication.'
-        });
-    } else {
-        next();
+    // Log full error details to the console
+    if (err) {
+        console.error('Full error stack:', err.stack);
     }
+
+    // Return a generic error message to the user
+    res.status(500).json({
+        success: false,
+        error: 'Internal server error during authentication.'
+    });
 });
 
 // Server configuration
