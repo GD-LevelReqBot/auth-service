@@ -2,7 +2,11 @@ const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
 const OAuth2Strategy = require('passport-oauth').OAuth2Strategy;
+const axios = require('axios');
 const cors = require('cors');
+const dotenv = require('dotenv');
+
+dotenv.config(); // To load environment variables
 
 const app = express();
 
@@ -21,98 +25,85 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport configuration
+// Passport configuration for Twitch authentication
 passport.use('twitch', new OAuth2Strategy({
         authorizationURL: 'https://id.twitch.tv/oauth2/authorize',
         tokenURL: 'https://id.twitch.tv/oauth2/token',
-        clientID: process.env.TWITCH_CLIENT_ID || 'xa7q77aepewgt88z6d566olye10kc8',
-        clientSecret: process.env.TWITCH_CLIENT_SECRET || '',
+        clientID: process.env.TWITCH_CLIENT_ID,
+        clientSecret: process.env.TWITCH_CLIENT_SECRET,
         callbackURL: process.env.REDIRECT_URI || 'http://localhost:3000/auth/twitch/callback',
         state: true
     },
     function(accessToken, refreshToken, profile, done) {
-        console.log('OAuth2 Strategy callback triggered');
-        console.log('Access Token:', accessToken);
-        console.log('Refresh Token:', refreshToken);
-        console.log('Profile:', profile);
-
         // Simply pass the access token back
         return done(null, { accessToken, refreshToken });
     }
 ));
 
-passport.serializeUser((user, done) => {
-    console.log('Serializing user:', user);
-    done(null, user);
-});
-
-passport.deserializeUser((user, done) => {
-    console.log('Deserializing user:', user);
-    done(null, user);
-});
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
 
 // Route to initiate Twitch authentication
-app.get('/auth/twitch', (req, res, next) => {
-    console.log('Initiating Twitch authentication');
-    passport.authenticate('twitch', {
-        scope: ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
-        force_verify: true
-    })(req, res, next);
+app.get('/auth/twitch', passport.authenticate('twitch', {
+    scope: ['user_read', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
+    force_verify: true
+}));
+
+// Callback route where we receive the code and exchange it for an access token
+app.get('/auth/twitch/callback', async (req, res) => {
+    console.log('Twitch callback received');
+
+    const { code, state } = req.query;
+
+    if (!code || !state) {
+        console.error('Missing code or state in the callback request');
+        return res.status(400).json({ success: false, error: 'Missing code or state' });
+    }
+
+    console.log('Received state:', state);
+    console.log('Received code:', code);
+
+    // Optionally verify the state parameter here (check that it's the same as the one sent)
+    // For simplicity, we are not checking it here, but it’s recommended to do so.
+
+    try {
+        // Exchange the code for an access token
+        const tokenData = await exchangeCodeForToken(code);
+
+        console.log('Token exchange successful', tokenData);
+
+        // Redirect to the client with the access token
+        res.redirect(`http://localhost:24363/twitch/auth/token?accessToken=${encodeURIComponent(tokenData.access_token)}`);
+    } catch (error) {
+        console.error('Error during token exchange:', error);
+        res.status(500).json({ success: false, error: 'Token exchange failed' });
+    }
 });
 
-// Callback route
-app.get('/auth/twitch/callback',
-    passport.authenticate('twitch'),
-    (req, res) => {
-        console.log('Twitch callback received');
-        
-        if (!req.user || !req.user.accessToken) {
-            console.error('No user or access token found in session');
-            return res.status(400).json({ success: false, error: 'No access token in session' });
-        }
+// Function to exchange code for access token
+async function exchangeCodeForToken(code) {
+    const data = {
+        client_id: process.env.TWITCH_CLIENT_ID,
+        client_secret: process.env.TWITCH_CLIENT_SECRET,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: process.env.REDIRECT_URI || 'http://localhost:3000/auth/twitch/callback'
+    };
 
-        console.log('Access Token:', req.user.accessToken);
-        
-        // Log the successful authentication flow
-        console.log('Authentication successful. Redirecting to client.');
-
-        // Redirect to client with access token
-        const redirectURL = `http://localhost:24363/twitch/auth/token?accessToken=${encodeURIComponent(req.user.accessToken)}`;
-        console.log('Redirecting to:', redirectURL);
-        res.redirect(redirectURL);
+    try {
+        const response = await axios.post('https://id.twitch.tv/oauth2/token', data);
+        return response.data; // Contains access token, refresh token, etc.
+    } catch (error) {
+        console.error('Error exchanging code for token:', error.response ? error.response.data : error.message);
+        throw error; // Re-throw so we can handle it in the callback
     }
-);
+}
 
-// Generic failed authentication route with full error logging
+// Failed authentication route
 app.get('/auth/failed', (req, res) => {
-    console.error('Authentication failed');
-
-    // Log the full error if available
-    if (req.query.error) {
-        console.error(`Twitch error: ${req.query.error}`);
-        console.error(`Twitch error_description: ${req.query.error_description}`);
-    }
-
-    // Return a simple, consistent error message to the user
     res.status(401).json({
         success: false,
-        error: 'Authentication failed. Please try again later.'
-    });
-});
-
-// Error handling middleware for logging all errors, including Passport errors
-app.use((err, req, res, next) => {
-    console.error('Passport or application error:', err);
-
-    // Log full error details to the console
-    if (err) {
-        console.error('Full error stack:', err.stack);
-    }
-
-    // Return a generic error message to the user
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error during authentication.'
+        error: 'Authentication failed'
     });
 });
 
