@@ -83,22 +83,20 @@ app.get('/auth/twitch/callback',
     }
 );
 
-// Enhanced failed authentication route with detailed error logging
+// Generic failed authentication route
 app.get('/auth/failed', (req, res) => {
-    console.error('Authentication failed: Detailed Error');
-    
-    // Check if there is a specific error message in the request (if provided by Twitch)
+    console.error('Authentication failed');
+
+    // Log any error details (if available) for debugging purposes, but do not include them in the response
     if (req.query.error) {
         console.error(`Twitch error: ${req.query.error}`);
         console.error(`Twitch error_description: ${req.query.error_description}`);
     }
-    
-    // Log the error from the query parameters if available
-    const errorMessage = req.query.error_description || 'Unknown error';
+
+    // Return a simple, consistent error message to the user
     res.status(401).json({
         success: false,
-        error: 'Authentication failed',
-        errorDetails: errorMessage
+        error: 'Authentication failed. Please try again later.'
     });
 });
 
