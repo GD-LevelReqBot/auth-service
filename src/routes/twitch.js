@@ -5,30 +5,32 @@ const { authLimiter } = require('../middleware/rateLimiter');
 
 const router = Router();
 
-// Redirect user to Twitch OAuth consent screen
-router.get('/auth/twitch', authLimiter, passport.authenticate('twitch', {
-    scope: config.twitch.scopes,
-    force_verify: true,
-}));
+// Redirect to Twitch OAuth.
+// Optional ?target=bot query param: when present, the token callback goes to
+// /twitch/bot/token instead of /twitch/auth/token so the app can distinguish
+// which account was just authorized.
+router.get('/auth/twitch', authLimiter, (req, res, next) => {
+    const target = req.query.target === 'bot' ? 'bot' : 'channel';
+    req.session.twitchAuthTarget = target;
 
-// Twitch redirects here after user grants access.
-// passport.authenticate verifies the state parameter — CSRF protected.
+    passport.authenticate('twitch', {
+        scope: config.twitch.scopes,
+        force_verify: true,
+    })(req, res, next);
+});
+
+// Twitch redirects here after the user grants access.
+// passport verifies the state — CSRF protected.
 router.get('/auth/twitch/callback', (req, res, next) => {
     passport.authenticate('twitch', (err, user) => {
-        if (err) {
-            console.error('[twitch] OAuth error:', err);
-            return res.redirect('/auth/failed');
-        }
-        if (!user) {
-            console.error('[twitch] Authentication failed — no user returned');
-            return res.redirect('/auth/failed');
-        }
+        if (err || !user) return res.redirect('/auth/failed');
+
         req.logIn(user, (loginErr) => {
-            if (loginErr) {
-                console.error('[twitch] Session login error:', loginErr);
-                return res.redirect('/auth/failed');
-            }
-            const dest = `http://localhost:${config.localClientPort}/twitch/auth/token?accessToken=${encodeURIComponent(user.accessToken)}`;
+            if (loginErr) return res.redirect('/auth/failed');
+
+            const target = req.session.twitchAuthTarget || 'channel';
+            const path   = target === 'bot' ? '/twitch/bot/token' : '/twitch/auth/token';
+            const dest   = `http://localhost:${config.localClientPort}${path}?accessToken=${encodeURIComponent(user.accessToken)}`;
             res.redirect(dest);
         });
     })(req, res, next);
