@@ -13,13 +13,25 @@ router.get('/auth/twitch', authLimiter, passport.authenticate('twitch', {
 
 // Twitch redirects here after user grants access.
 // passport.authenticate verifies the state parameter — CSRF protected.
-router.get('/auth/twitch/callback',
-    passport.authenticate('twitch', { failureRedirect: '/auth/failed' }),
-    (req, res) => {
-        const { accessToken } = req.user;
-        const dest = `http://localhost:${config.localClientPort}/twitch/auth/token?accessToken=${encodeURIComponent(accessToken)}`;
-        res.redirect(dest);
-    }
-);
+router.get('/auth/twitch/callback', (req, res, next) => {
+    passport.authenticate('twitch', (err, user) => {
+        if (err) {
+            console.error('[twitch] OAuth error:', err);
+            return res.redirect('/auth/failed');
+        }
+        if (!user) {
+            console.error('[twitch] Authentication failed — no user returned');
+            return res.redirect('/auth/failed');
+        }
+        req.logIn(user, (loginErr) => {
+            if (loginErr) {
+                console.error('[twitch] Session login error:', loginErr);
+                return res.redirect('/auth/failed');
+            }
+            const dest = `http://localhost:${config.localClientPort}/twitch/auth/token?accessToken=${encodeURIComponent(user.accessToken)}`;
+            res.redirect(dest);
+        });
+    })(req, res, next);
+});
 
 module.exports = router;

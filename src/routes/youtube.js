@@ -24,7 +24,14 @@ router.get('/auth/youtube/callback', (req, res, next) => {
         return res.status(503).json({ success: false, error: 'YouTube auth is not configured on this server.' });
     }
     passport.authenticate('youtube', { failureRedirect: '/auth/failed' }, (err, user) => {
-        if (err || !user) return res.redirect('/auth/failed');
+        if (err) {
+            console.error('[youtube] OAuth error:', err);
+            return res.redirect('/auth/failed');
+        }
+        if (!user) {
+            console.error('[youtube] Authentication failed — no user returned');
+            return res.redirect('/auth/failed');
+        }
         const { accessToken } = user;
         const dest = `http://localhost:${config.localClientPort}/youtube/auth/token?accessToken=${encodeURIComponent(accessToken)}`;
         res.redirect(dest);
