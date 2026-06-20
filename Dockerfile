@@ -7,10 +7,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
-
 COPY . .
+RUN chmod +x docker-entrypoint.sh
 
 ENV NODE_ENV=production
 ENV PORT=3000

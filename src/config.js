@@ -24,14 +24,23 @@ module.exports = {
         clientId: process.env.TWITCH_CLIENT_ID,
         clientSecret: process.env.TWITCH_CLIENT_SECRET,
         redirectUri: process.env.TWITCH_REDIRECT_URI,
-        // Scopes needed for chat, announcements, and subscriber detection
-        scopes: ['channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
+        // chat:read + chat:edit for Twitch IRC (twitch-irc crate)
+        // user:read:chat + user:write:chat for new Helix chat API
+        // channel:bot + moderator:manage:announcements for bot presence + announcements
+        scopes: ['chat:read', 'chat:edit', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
     },
 
     youtube: {
         clientId: process.env.YOUTUBE_CLIENT_ID || null,
         clientSecret: process.env.YOUTUBE_CLIENT_SECRET || null,
         redirectUri: process.env.YOUTUBE_REDIRECT_URI || null,
-        scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
+        // youtube.readonly — read live chat messages
+        // openid + email + profile — lets us call /oauth2/v3/userinfo to show who's connected
+        scopes: [
+            'https://www.googleapis.com/auth/youtube.readonly',
+            'openid',
+            'email',
+            'profile',
+        ],
     },
 };
