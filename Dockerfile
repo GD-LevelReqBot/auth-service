@@ -1,5 +1,7 @@
 FROM node:18-slim
 
+ARG CACHEBUST
+
 WORKDIR /app
 
 COPY package*.json ./
