@@ -14,6 +14,9 @@ const youtubeRoutes = require('./routes/youtube');
 
 const app = express();
 
+// Trust the immediate reverse proxy (nginx/Caddy) so rate limiting uses the real client IP
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
