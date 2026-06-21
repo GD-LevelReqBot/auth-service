@@ -24,10 +24,24 @@ module.exports = {
         clientId: process.env.TWITCH_CLIENT_ID,
         clientSecret: process.env.TWITCH_CLIENT_SECRET,
         redirectUri: process.env.TWITCH_REDIRECT_URI,
-        // chat:read + chat:edit for Twitch IRC (twitch-irc crate)
-        // user:read:chat + user:write:chat for new Helix chat API
-        // channel:bot + moderator:manage:announcements for bot presence + announcements
-        scopes: ['chat:read', 'chat:edit', 'channel:bot', 'user:read:chat', 'user:write:chat', 'moderator:manage:announcements'],
+        scopes: [
+            // Chat
+            'chat:read',
+            'chat:edit',
+            'channel:bot',
+            'user:read:chat',
+            'user:write:chat',
+            // Moderation
+            'moderator:manage:announcements',
+            'moderator:manage:banned_users',
+            'moderator:manage:chat_messages',
+            'moderator:read:chatters',
+            'moderator:read:followers',
+            // Channel
+            'channel:read:subscriptions',
+            'channel:read:redemptions',
+            'channel:manage:redemptions',
+        ],
     },
 
     youtube: {
